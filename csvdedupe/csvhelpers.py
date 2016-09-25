@@ -36,8 +36,8 @@ def preProcess(column):
 
 def readData(input_file, field_names, prefix=None):
     """
-    Read in our data from a CSV file and create a dictionary of records, 
-    where the key is a unique record ID and each value is a dict 
+    Read in our data from a CSV file and create a dictionary of records,
+    where the key is a unique record ID and each value is a dict
     of the row fields.
 
     **Currently, dedupe depends upon records' unique ids being integers
@@ -46,7 +46,7 @@ def readData(input_file, field_names, prefix=None):
     """
 
     data = {}
-    
+
     reader = csv.DictReader(StringIO(input_file))
     for i, row in enumerate(reader):
         clean_row = {k: preProcess(v) for (k, v) in row.items()}
@@ -62,7 +62,7 @@ def readData(input_file, field_names, prefix=None):
 # ## Writing results
 def writeResults(clustered_dupes, input_file, output_file):
 
-    # Write our original data back out to a CSV with a new column called 
+    # Write our original data back out to a CSV with a new column called
     # 'Cluster ID' which indicates which records refer to each other.
 
     logging.info('saving results to: %s' % output_file)
@@ -95,7 +95,7 @@ def writeResults(clustered_dupes, input_file, output_file):
 # ## Writing results
 def writeUniqueResults(clustered_dupes, input_file, output_file):
 
-    # Write our original data back out to a CSV with a new column called 
+    # Write our original data back out to a CSV with a new column called
     # 'Cluster ID' which indicates which records refer to each other.
 
     logging.info('saving unique results to: %s' % output_file)
@@ -131,7 +131,7 @@ def writeUniqueResults(clustered_dupes, input_file, output_file):
 
 
 def writeLinkedResults(clustered_pairs, input_1, input_2, output_file,
-                       inner_join=False):
+                       inner_join=False, reverse_order=False):
     logging.info('saving unique results to: %s' % output_file)
 
     matched_records = []
@@ -139,18 +139,26 @@ def writeLinkedResults(clustered_pairs, input_1, input_2, output_file,
     seen_2 = set()
 
     input_1 = [row for row in csv.reader(StringIO(input_1))]
-    row_header = input_1.pop(0)
-    length_1 = len(row_header)
+    row_header_1 = input_1.pop(0)
+    length_1 = len(row_header_1)
 
     input_2 = [row for row in csv.reader(StringIO(input_2))]
     row_header_2 = input_2.pop(0)
     length_2 = len(row_header_2)
-    row_header += row_header_2
+
+    if reverse_order:
+        row_header = ['score'] + row_header_2 + row_header_1
+    else:
+        row_header = ['score'] + row_header_1 + row_header_2
 
     for pair in clustered_pairs:
         index_1, index_2 = [int(index.split('|', 1)[1]) for index in pair[0]]
 
-        matched_records.append(input_1[index_1] + input_2[index_2])
+        score = [str(pair[1])]
+        if reverse_order:
+            matched_records.append(score + input_2[index_2] + input_1[index_1])
+        else:
+            matched_records.append(score + input_1[index_1] + input_2[index_2])
         seen_1.add(index_1)
         seen_2.add(index_2)
 
@@ -161,14 +169,19 @@ def writeLinkedResults(clustered_pairs, input_1, input_2, output_file,
         writer.writerow(matches)
 
     if not inner_join:
-
         for i, row in enumerate(input_1):
             if i not in seen_1:
-                writer.writerow(row + [None] * length_2)
+                if reverse_order:
+                    writer.writerow(['0'] + [None] * length_2 + row)
+                else:
+                    writer.writerow(['0'] + row + [None] * length_2)
 
         for i, row in enumerate(input_2):
             if i not in seen_2:
-                writer.writerow([None] * length_1 + row)
+                if reverse_order:
+                    writer.writerow(['0'] + row + [None] * length_1)
+                else:
+                    writer.writerow(['0'] + [None] * length_1 + row)
 
 class CSVCommand(object) :
     def __init__(self) :
@@ -223,13 +236,13 @@ class CSVCommand(object) :
             help='CSV file to store deduplication results')
         self.parser.add_argument('--skip_training', action='store_true',
             help='Skip labeling examples by user and read training from training_files only')
-        self.parser.add_argument('--training_file', type=str, 
+        self.parser.add_argument('--training_file', type=str,
             help='Path to a new or existing file consisting of labeled training examples')
         self.parser.add_argument('--settings_file', type=str,
             help='Path to a new or existing file consisting of learned training settings')
-        self.parser.add_argument('--sample_size', type=int, 
+        self.parser.add_argument('--sample_size', type=int,
             help='Number of random sample pairs to train off of')
-        self.parser.add_argument('--recall_weight', type=int, 
+        self.parser.add_argument('--recall_weight', type=int,
             help='Threshold that will maximize a weighted average of our precision and recall')
         self.parser.add_argument('-v', '--verbose', action='count', default=0)
 
